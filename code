@@ -1,0 +1,119 @@
+import os
+import sys
+import time
+import pygame
+
+# Get the directory where the current script is located
+main_dir = os.path.dirname(os.path.abspath(__file__))
+
+def main(file_path=None):
+    # If no drum file path is provided, use the default path (data/drum.wav)
+    if file_path is None:
+        file_path = os.path.join(main_dir, 'data/drum.wav')
+
+    # Input BPM (beats per minute)
+    while True:
+        try:
+            bpm = int(input("Enter BPM (beats per minute, integer): "))
+            if bpm > 0:
+                break
+        except ValueError:
+            pass
+        print("⚠️  ValueError//.Please enter a positive integer (e.g., 120).")
+
+    # Supported rhythm types
+    rhythms = {
+        "quarter": [1, "Quarter notes (1 per beat)"],
+        "eighth": [2, "Eighth notes (2 per beat)"],
+        "triplets": [3, "Triplets (3 per beat)"],
+        "16+8": [[4, 2], "Four 16th notes + Four 8th notes"]
+    }
+
+    print("\n🎵 Rhythm options:")
+    for key, val in rhythms.items():
+        print(f" - {key}: {val[1]}")
+
+    # User selects rhythm type
+    while True:
+        rhythm = input("\nEnter rhythm type: ").strip().lower()
+        if rhythm in rhythms:
+            break
+        print("⚠️  Invalid rhythm type. Try again.")
+
+    # Initialize pygame mixer and display
+    pygame.init()
+    pygame.mixer.init()
+    pygame.display.set_mode((200, 100))  # Small window to prevent unresponsiveness
+    sound = pygame.mixer.Sound(file_path)
+
+    # Duration of one beat in milliseconds
+    beat_ms = 60000 // bpm
+
+    print(f"\n🎵 Current BPM: {bpm}")
+    print(f"🎼 Rhythm: {rhythms[rhythm][1]}")
+    print("▶️  Starting playback. Press SPACE to tap in rhythm. Press B to stop.\n")
+
+    running = True
+    last_play_time = None
+    tap_errors = []
+
+    def handle_events():
+        """Detect keyboard events"""
+        nonlocal running, last_play_time, tap_errors
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and last_play_time:
+                    now = time.time()
+                    error = int((now - last_play_time) * 1000)
+                    tap_errors.append(error)
+                    if abs(error) <= 199:
+                        print(f"✅ On time (±{error} ms)")
+                    elif error > 600:
+                        print(f"❗ Too early by {error} ms")
+                    else:
+                        print(f"❗ Too late by {error} ms")
+                elif event.key == pygame.K_b:
+                    running = False
+
+    def play_sound():
+        """Play the drum sound once and record play time"""
+        nonlocal last_play_time
+        sound.play()
+        last_play_time = time.time()
+
+    # Playback logic
+    if rhythm == "16+8":
+        pattern = [beat_ms // 4] * 4 + [beat_ms // 2] * 4  # 4 sixteenth notes + 4 eighth notes
+        while running:
+            for dur in pattern:
+                play_sound()
+                for _ in range(dur // 10):
+                    handle_events()
+                    pygame.time.wait(10)
+                if not running:
+                    break
+    else:
+        interval = beat_ms // rhythms[rhythm][0]  # Interval between rhythm points
+        while running:
+            play_sound()
+            for _ in range(interval // 10):
+                handle_events()
+                pygame.time.wait(10)
+
+    # Show results after playback
+    print("⏹ Playback stopped.")
+    if tap_errors:
+        avg = sum(tap_errors) / len(tap_errors)
+        print(f"\n📊 You tapped {len(tap_errors)} times.")
+        print(f"📈 Average timing error: {avg:.1f} ms")
+    else:
+        print("📭 No taps detected.")
+
+    pygame.quit()
+
+# Use command-line audio path if provided, otherwise use default
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        main(sys.argv[1])
+    else:
+        main()
