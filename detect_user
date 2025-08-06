@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+
+"""
+Plays a raw drum sound repeatedly at the BPM and rhythm type specified by the user.
+Press SPACE to check timing accuracy. Press B to stop.
+"""
+
+import os.path
+import sys
+import pygame
+import time
+
+main_dir = os.path.split(os.path.abspath(__file__))[0]
+
+def main(file_path=None):
+    if file_path is None:
+        file_path = os.path.join(main_dir, 'data', 'drum.wav')  # 默认鼓声文件路径
+
+    # 用户输入 BPM
+    while True:
+        try:
+            bpm_input = input("Enter BPM (beats per minute, integer): ")
+            bpm = int(bpm_input)
+            if bpm <= 0:
+                raise ValueError
+            break
+        except ValueError:
+            print("⚠️  Please enter a positive integer (e.g., 120).")
+
+    # 用户选择节奏类型
+    rhythm_options = {
+        "triplets": [3, "Triplets (3 per beat)"],
+        "quarter": [1, "Quarter notes (1 per beat)"],
+        "eighth": [2, "Eighth notes (2 per beat)"],
+        "16+8": [[4, 2], "Four 16th notes + Four 8th notes"]
+    }
+
+    print("\n🎵 Rhythm options:")
+    for key, val in rhythm_options.items():
+        print(f" - {key} : {val[1]}")
+
+    while True:
+        rhythm_choice = input("\nEnter rhythm type: ").strip().lower()
+        if rhythm_choice in rhythm_options:
+            break
+        print("⚠️  Invalid rhythm type. Try again.")
+
+    # 初始化 pygame
+    pygame.init()
+    pygame.mixer.init()
+    pygame.display.set_mode((200, 100))  # 避免无窗口响应
+
+    # 加载鼓声
+    sound = pygame.mixer.Sound(file_path)
+
+    # 一个拍子的时长（毫秒）
+    beat_duration_ms = 60000 // bpm
+
+    print(f"\n🎵 Current BPM: {bpm}")
+    print(f"🎼 Rhythm: {rhythm_options[rhythm_choice][1]}")
+    print("▶️  Starting playback. Press SPACE to tap in rhythm. Press B to stop.\n")
+
+    running = True
+    clock = pygame.time.Clock()
+    last_play_time = None
+    play_times = []
+    tap_errors = []
+
+    def handle_events():
+        nonlocal running, tap_errors, last_play_time
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and last_play_time is not None:
+                    tap_time = time.time()
+                    error_ms = int((tap_time - last_play_time) * 1000)
+                    diff = error_ms
+                    tap_errors.append(diff)
+                    if diff < -120:
+                        print(f"❗ Too early by {-diff} ms")
+                    elif diff > 120:
+                        print(f"❗ Too late by {diff} ms")
+                    else:
+                        print(f"✅ On time (±{diff} ms)")
+                elif event.key == pygame.K_b:
+                    running = False
+
+    def play_and_track():
+        nonlocal last_play_time
+        sound.play()
+        last_play_time = time.time()
+
+    if rhythm_choice == "16+8":
+        # 播放一个循环节奏：4 个十六分音符 + 4 个八分音符
+        while running:
+            durations = [beat_duration_ms // 4] * 4 + [beat_duration_ms // 2] * 4
+            for duration in durations:
+                play_and_track()
+                for _ in range(duration // 10):
+                    handle_events()
+                    pygame.time.wait(10)
+                if not running:
+                    break
+    else:
+        notes_per_beat = rhythm_options[rhythm_choice][0]
+        interval = beat_duration_ms // notes_per_beat
+
+        while running:
+            play_and_track()
+            for _ in range(interval // 10):
+                handle_events()
+                pygame.time.wait(10)
+
+    print("⏹ Playback stopped.")
+    if tap_errors:
+        avg_error = sum(tap_errors) / len(tap_errors)
+        print(f"\n📊 You tapped {len(tap_errors)} times.")
+        print(f"📈 Average timing error: {avg_error:.1f} ms")
+    else:
+        print("📭 No taps detected.")
+
+    pygame.quit()
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        main(sys.argv[1])
+    else:
+        main()
